@@ -7,7 +7,7 @@
     "process": false
   },
   "scripts": {
-    "build": "esbuild kmf2obj.mjs --outdir=dist --bundle --format=esm --minify --define:process.env.NODE_ENV=\\\"production\\\" --define:process.env.NODE_DEBUG=false",
+    "build": "esbuild kmf2obj.mjs --outdir=dist --bundle --format=esm --define:process.env.NODE_ENV=\\\"production\\\" --define:process.env.NODE_DEBUG=false",
     "watch": "esbuild kmf2obj.mjs --outdir=dist --bundle --format=esm --minify --sourcemap --watch",
     "start": "npm run build && node server.js"
   },

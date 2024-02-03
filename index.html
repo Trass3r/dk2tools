@@ -52,6 +52,10 @@
     document.getElementById('dropZone').addEventListener('dragover', handleDragOver);
 
     function handleFile(file) {
+      if (!file.name.endsWith(".kmf")) {
+        alert("I need a kmf file");
+        return;
+      }
       const reader = new FileReader();
 
       reader.onload = function (e) {

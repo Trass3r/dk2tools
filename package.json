@@ -1,5 +1,21 @@
 {
+  "main": "kmf2obj.mjs",
+  "browser": {
+    "fs": false,
+    "iconv-lite": false,
+    "zlib": false,
+    "process": false
+  },
+  "scripts": {
+    "build": "esbuild kmf2obj.mjs --bundle --outdir=dist --format=esm --define:process.env.NODE_ENV=\\\"production\\\" --define:process.env.NODE_DEBUG=false",
+    "watch": "esbuild kmf2obj.mjs --bundle --minify --sourcemap --watch --outfile=dist/bundle.js",
+    "start": "npm run build && node server.js"
+  },
   "dependencies": {
-    "kaitai-struct": "^0.10.0"
+    "kaitai-struct": "^0.10.0",
+    "util": "^0.12.5"
+  },
+  "devDependencies": {
+    "esbuild": "^0.20.0"
   }
 }

@@ -1,0 +1,70 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>File Upload</title>
+  <style>
+    #output {
+      white-space: pre-wrap;
+    }
+  </style>
+</head>
+<body>
+  <div id="dropZone">
+    <p>Drag and drop a file here, or</p>
+    <input type="file" id="fileInput" accept=".kmf">
+    <button id="uploadButton">Upload</button>
+  </div>
+  <div id="outputDiv">
+    <code id="output">
+    </code>
+  </div>
+
+  <script type="module">
+    import { DOMStreamWriter } from './DOMStreamWriter.mjs';
+    import { kmf2obj } from './kmf2obj.js';
+
+    function handleDragOver(event) {
+      event.preventDefault();
+      event.dataTransfer.dropEffect = 'copy';
+    }
+
+    function handleDrop(event) {
+      event.preventDefault();
+      const file = event.dataTransfer.files[0];
+      handleFile(file);
+    }
+
+    function uploadFile() {
+      const fileInput = document.getElementById('fileInput');
+      const file = fileInput.files[0];
+
+      if (file) {
+        handleFile(file);
+      }
+    }
+
+    // Using addEventListener for the upload button
+    document.getElementById('uploadButton').addEventListener('click', uploadFile);
+    // Using addEventListener for the drop zone
+    document.getElementById('dropZone').addEventListener('drop', handleDrop);
+    document.getElementById('dropZone').addEventListener('dragover', handleDragOver);
+
+    function handleFile(file) {
+      //const outputDiv = document.getElementById('output');
+      const reader = new FileReader();
+
+      reader.onload = function (e) {
+        console.log(file.name);
+        const fileContent = e.target.result;
+        const outputDivWriter = new DOMStreamWriter('output');
+        kmf2obj(file.name, fileContent, outputDivWriter);
+        //outputDiv.innerText = output;
+      };
+
+      reader.readAsArrayBuffer(file);
+    }
+  </script>
+</body>
+</html>

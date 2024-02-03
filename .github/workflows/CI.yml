@@ -33,7 +33,7 @@ jobs:
         kaitai-struct-compiler --verbose file -t javascript kmf.ksy
         ls -la
         npm run build
-        cp index.html DOMStreamWriter.mjs dist/
+        cp index.html StringStreamWriter.mjs dist/
 
     - name: Deploy to GitHub Pages
       uses: JamesIves/github-pages-deploy-action@v4

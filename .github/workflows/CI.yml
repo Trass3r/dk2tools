@@ -1,0 +1,41 @@
+name: Build and Deploy to GitHub Pages
+
+on:
+  push:
+    branches:
+    - main
+
+permissions:
+  contents: write
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+    concurrency: ci-${{ github.ref }}
+
+    steps:
+    - uses: actions/checkout@v4
+
+    - uses: actions/setup-node@v4
+      with:
+        node-version: latest
+
+    - name: prereqs
+      run: |
+        set -eux
+        npm install
+        curl -LO https://github.com/kaitai-io/kaitai_struct_compiler/releases/download/0.10/kaitai-struct-compiler_0.10_all.deb
+        sudo apt-get install ./kaitai-struct-compiler_0.10_all.deb
+
+    - name: build
+      run: |
+        set -eux
+        kaitai-struct-compiler --verbose file -t javascript kmf.ksy
+        ls -la
+        npm run build
+        cp index.html DOMStreamWriter.mjs dist/
+
+    - name: Deploy to GitHub Pages
+      uses: JamesIves/github-pages-deploy-action@v4
+      with:
+        folder: dist

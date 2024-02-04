@@ -97,7 +97,7 @@ for (let i = 0; i < kmf.mesh.header.numGroups; ++i) {
 	for (let j = 0; j < meshGroup.numVertices; ++j) {
 		const vertex = meshGroupData.vertices.vertexData[j];
 		output.write(util.format("vt %d %d\n", vertex.u / 32768.0, 1.0 - vertex.v / 32768.0));
-		// output.write(util.format("vn %d %d %d\n", vertex.nX, -vertex.nZ, vertex.nY));
+		// output.write(util.format("vn %d %d %d\n", vertex.normal.x, -vertex.normal.z, vertex.normal.y));
 	}
 }
 
@@ -138,9 +138,9 @@ for (frameIdx = 0; frameIdx < (isAnim ? kmf.mesh.header.numFrames : 1); ++frameI
 				v2idx = computeAnimVertex(frameIdx, v2.itabIdx);
 				v3idx = computeAnimVertex(frameIdx, v3.itabIdx);
 			} else {
-				v1idx = v1.index + 1;
-				v2idx = v2.index + 1;
-				v3idx = v3.index + 1;
+				v1idx = v1.geomIdx + 1;
+				v2idx = v2.geomIdx + 1;
+				v3idx = v3.geomIdx + 1;
 			}
 
 			output.write(`f ${v1idx}/${verticesCounter + triangle.x + 1} ${v3idx}/${verticesCounter + triangle.z + 1} ${v2idx}/${verticesCounter + triangle.y + 1}\n`);

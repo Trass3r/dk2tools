@@ -13,12 +13,3 @@ export class DOMStreamWriter {
 		}
 	}
 }
-
-/*
-function writeToStream(data, outputStream, ...args) {
-	outputStream.write(data, ...args);
-}
-
-const outputDivWriter = new DOMStreamWriter('output');
-writeToStream('Formatted text: %s - %s', outputDivWriter, 'arg1', 'arg2');
-*/

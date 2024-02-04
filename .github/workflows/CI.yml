@@ -39,7 +39,7 @@ jobs:
         kaitai-struct-compiler --verbose file -t javascript kmf.ksy
         ls -la
         npm run build
-        cp index.html StringStreamWriter.mjs dist/
+        cp kmf2obj.html StringStreamWriter.mjs dist/
 
     - uses: actions/upload-artifact@v4
       with:

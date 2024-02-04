@@ -7,15 +7,22 @@
     "process": false
   },
   "scripts": {
-    "build": "esbuild kmf2obj.mjs --outdir=dist --bundle --format=esm --define:process.env.NODE_ENV=\\\"production\\\" --define:process.env.NODE_DEBUG=false",
+    "build": "esbuild kmf2gltf.mjs --outdir=dist --bundle --format=esm --define:process.env.NODE_ENV=\\\"production\\\" --define:process.env.NODE_DEBUG=false",
     "watch": "esbuild kmf2obj.mjs --outdir=dist --bundle --format=esm --minify --sourcemap --watch",
     "start": "npm run build && node server.js"
   },
   "dependencies": {
+    "@babylonjs/core": "^6.42.0",
+    "@babylonjs/serializers": "^6.42.0",
     "kaitai-struct": "^0.10.0",
     "util": "^0.12.5"
   },
   "devDependencies": {
-    "esbuild": "^0.20.0"
+    "@typescript-eslint/eslint-plugin": "^6.21.0",
+    "@typescript-eslint/parser": "^6.21.0",
+    "esbuild": "^0.20.0",
+    "esbuild-plugin-tsc": "^0.4.0",
+    "eslint": "^8.56.0",
+    "typescript": "^5.3.3"
   }
 }

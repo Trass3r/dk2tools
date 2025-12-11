@@ -57,6 +57,21 @@
 
     /* subtle fade when hiding */
     #dropZone.hidden{ opacity:0; transform: translate(-50%, -46%); pointer-events:none; transition: opacity 240ms ease, transform 240ms ease; }
+    /* overlay and highlight when dragging files */
+    body.drag-active::before{
+      content: '';
+      position: fixed;
+      left: 0; right: 0; top: 0; bottom: 0;
+      background: rgba(0,0,0,0.45);
+      z-index: 45;
+      pointer-events: none;
+    }
+    body.drag-active #dropZone{
+      box-shadow: 0 0 0 4px rgba(31,139,211,0.85), 0 12px 40px rgba(31,139,211,0.12);
+      transform: translate(-50%, -50%) scale(1.02);
+      border-color: rgba(31,139,211,0.9);
+      transition: box-shadow 160ms ease, transform 160ms ease, border-color 160ms ease;
+    }
   </style>
 </head>
 <body>
@@ -71,13 +86,34 @@
   <script type="module">
     import { kmf2gltf } from './kmf2gltf.js';
 
+    // Use a debounced dragover approach to avoid flicker and ensure stable state
+    let _dragTimeout = null;
+    function setDragActive() {
+      // show overlay and panel
+      document.body.classList.add('drag-active');
+      const dz = document.getElementById('dropZone');
+      if (dz) dz.classList.remove('hidden');
+
+      // reset timer that will clear the active state shortly after drag stops
+      if (_dragTimeout) clearTimeout(_dragTimeout);
+      _dragTimeout = setTimeout(() => {
+        document.body.classList.remove('drag-active');
+        _dragTimeout = null;
+      }, 250);
+    }
+
     function handleDragOver(event) {
       event.preventDefault();
-      event.dataTransfer.dropEffect = 'copy';
+      // keep UI active while dragging
+      setDragActive();
+      try { event.dataTransfer.dropEffect = 'copy'; } catch (e) { }
     }
 
     function handleDrop(event) {
       event.preventDefault();
+      // clear drag-over timer and visual state
+      if (_dragTimeout) { clearTimeout(_dragTimeout); _dragTimeout = null; }
+      document.body.classList.remove('drag-active');
       handleFiles(event.dataTransfer.files);
       const dz = document.getElementById('dropZone');
       if (dz) dz.classList.add('hidden');
@@ -91,6 +127,17 @@
     // Global drag/drop handlers so the entire window (canvas) is a drop target
     window.addEventListener('drop', handleDrop);
     window.addEventListener('dragover', handleDragOver);
+
+    // also allow ESC to cancel the drag UI
+    window.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape' || e.key === 'Esc') {
+        if (_dragTimeout) { clearTimeout(_dragTimeout); _dragTimeout = null; }
+        document.body.classList.remove('drag-active');
+        // pressing Escape should cancel the drag UI but keep the drop hint visible
+        const dz = document.getElementById('dropZone');
+        if (dz) dz.classList.remove('hidden');
+      }
+    });
 
     // handle multiple files (one .kmf, and optional textures/assets)
     async function handleFiles(fileList) {

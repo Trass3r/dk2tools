@@ -153,8 +153,16 @@
 
       // build assets map: filename -> object URL (for textures/images)
       const assets = {};
+      const textureFormats = new Set(['png','jpg','jpeg','ktx','ktx2','dds','bmp','webp']);
       for (const f of files) {
         if (f === kmfFile) continue;
+        const name = f.name || '';
+        const dot = name.lastIndexOf('.');
+        const ext = dot >= 0 ? name.slice(dot+1).toLowerCase() : '';
+        if (!textureFormats.has(ext)) {
+          console.warn('Skipping unsupported asset file type:', f.name);
+          continue;
+        }
         // create object URL so Babylon can load the image
         try {
           assets[f.name] = URL.createObjectURL(f);

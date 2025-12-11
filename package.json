@@ -7,22 +7,25 @@
     "process": false
   },
   "scripts": {
-    "build": "esbuild kmf2gltf.mjs --outdir=dist --bundle --format=esm --define:process.env.NODE_ENV=\\\"production\\\" --define:process.env.NODE_DEBUG=false",
-    "watch": "esbuild kmf2obj.mjs --outdir=dist --bundle --format=esm --minify --sourcemap --watch",
-    "start": "npm run build && node server.js"
+    "build": "node build.mjs",
+    "watch": "node build.mjs --watch",
+    "start": "node build.mjs --watch --serve",
+    "dev": "node build.mjs --watch --serve"
   },
   "dependencies": {
-    "@babylonjs/core": "^6.42.0",
-    "@babylonjs/serializers": "^6.42.0",
-    "kaitai-struct": "^0.10.0",
+    "@babylonjs/core": "^8.40.1",
+    "@babylonjs/inspector": "^8.40.1",
+    "@babylonjs/serializers": "^8.40.1",
+    "kaitai-struct": "^0.11.0",
+    "source-map-explorer": "^2.5.3",
     "util": "^0.12.5"
   },
   "devDependencies": {
-    "@typescript-eslint/eslint-plugin": "^6.21.0",
-    "@typescript-eslint/parser": "^6.21.0",
-    "esbuild": "^0.20.0",
-    "esbuild-plugin-tsc": "^0.4.0",
-    "eslint": "^8.56.0",
-    "typescript": "^5.3.3"
+    "@typescript-eslint/eslint-plugin": "^8.49.0",
+    "@typescript-eslint/parser": "^8.49.0",
+    "esbuild": "^0.27.1",
+    "esbuild-plugin-tsc": "^0.5.0",
+    "eslint": "^9.39.1",
+    "typescript": "^5.9.3"
   }
 }

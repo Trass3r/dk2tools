@@ -1,43 +1,121 @@
-//import "@babylonjs/core/Legacy/legacy.js";
-import * as BABYLON from "@babylonjs/core/Engines/index.js";
-//import { Scene } from "@babylonjs/core/Scene/index.js";
+import { NullEngine } from '@babylonjs/core/Engines/nullEngine.js';
+import { Engine } from '@babylonjs/core/Engines/engine.js';
+import { Constants } from '@babylonjs/core/Engines/constants.js';
+import { Scene } from '@babylonjs/core/scene.js';
+import { Color3 } from '@babylonjs/core/Maths/math.color.js';
+import { Vector3 } from '@babylonjs/core/Maths/math.vector.js';
+import { ArcRotateCamera } from '@babylonjs/core/Cameras/arcRotateCamera.js';
+//import { FreeCamera } from '@babylonjs/core/Cameras/freeCamera.js';
+import { AxesViewer } from '@babylonjs/core/Debug/axesViewer.js';
+import { HemisphericLight } from '@babylonjs/core/Lights/hemisphericLight.js';
+import { MultiMaterial } from '@babylonjs/core/Materials/multiMaterial.js';
+import { StandardMaterial } from '@babylonjs/core/Materials/standardMaterial.js';
+import { Texture } from '@babylonjs/core/Materials/Textures/texture.js';
+//import { MeshBuilder } from '@babylonjs/core/Meshes/meshBuilder.js';
+import { Mesh } from '@babylonjs/core/Meshes/mesh.js';
+import { SubMesh } from '@babylonjs/core/Meshes/subMesh.js';
+import { VertexData } from '@babylonjs/core/Meshes/mesh.vertexData.js';
+import { MorphTargetManager } from '@babylonjs/core/Morph/morphTargetManager.js';
+import { MorphTarget } from '@babylonjs/core/Morph/morphTarget.js';
+import { AnimationGroup } from '@babylonjs/core/Animations/animationGroup.js';
+import { Animation } from '@babylonjs/core/Animations/animation.js';
 import { GLTF2Export } from '@babylonjs/serializers/glTF/index.js';
-import fs from 'fs';
+import { Inspector } from '@babylonjs/inspector';
 import KaitaiStream from 'kaitai-struct/KaitaiStream.js';
-import Kmf from './Kmf.js';
+import { Kmf } from './Kmf.js';
+import fs from 'fs';
 
-export function kmf2gltf(inputFileName, fileContent, output) {
+// simple hue -> rgb mapper to generate distinct colors for materials
+function hueToRgb(h) {
+	const s = 0.7;
+	const v = 0.9;
+	const c = v * s;
+	const hh = (h / 60.0);
+	const x = c * (1 - Math.abs((hh % 2) - 1));
+	let r = 0, g = 0, b = 0;
+	if (hh >= 0 && hh < 1) { r = c; g = x; b = 0; }
+	else if (hh < 2) { r = x; g = c; b = 0; }
+	else if (hh < 3) { r = 0; g = c; b = x; }
+	else if (hh < 4) { r = 0; g = x; b = c; }
+	else if (hh < 5) { r = x; g = 0; b = c; }
+	else { r = c; g = 0; b = x; }
+	const m = v - c;
+	return [r + m, g + m, b + m];
+}
 
-//const canvas = document.getElementById('renderCanvas');
-//const engine = new BABYLON.Engine(canvas, true, { preserveDrawingBuffer: true, stencil: true });
-const engine = new BABYLON.NullEngine();
+export function kmf2gltf(inputFileName, fileContent, assets = {}) {
+
+// try to create a real engine when running in the browser so we can render
+// to the on-page canvas. Fall back to NullEngine for node/headless usage.
+let engine;
+let canvas = null;
+const isBrowser = typeof window !== 'undefined' && typeof document !== 'undefined';
+if (isBrowser) {
+	canvas = document.getElementById('renderCanvas') || (() => {
+		const c = document.createElement('canvas');
+		c.id = 'renderCanvas';
+		document.body.appendChild(c);
+		return c;
+	})();
+	engine = new Engine(canvas, true, { preserveDrawingBuffer: true, stencil: true });
+} else {
+	engine = new NullEngine();
+}
 
 const createScene = function () {
 	// Create a basic BJS Scene object
-	const scene = new BABYLON.Scene(engine);
-	// Create a FreeCamera, and set its position to {x: 0, y: 5, z: -10}
-	//const camera = new BABYLON.FreeCamera('camera1', new BABYLON.Vector3(0, 5, -10), scene);
+	const scene = new Scene(engine);
+	// create a camera and a light when running in a browser so the scene can render
+	if (!isBrowser)
+		return scene;
+
+	// Instruct Babylon to not eagerly load textures: keep them as URI references
+	// so exporters can emit external image references instead of trying to read files.
+	//scene.useDelayedTextureLoading = true;
+	// Prefer serialized URL when available so exporter can write the filename
+	// instead of trying to read GPU/internal texture data.
+	//try { Texture.UseSerializedUrlIfAny = true; } catch (e) { }
+
+	// ArcRotateCamera provides intuitive mouse/touch orbit controls
+	const camera = new ArcRotateCamera('camera', Math.PI / 2, Math.PI / 3, 1, Vector3.Zero(), scene);
+	camera.attachControl(canvas, true);
+	//const camera = new FreeCamera('camera', new Vector3(-0.5, 0.5, 0.5), scene);
 	// Target the camera to scene origin
-	//camera.setTarget(BABYLON.Vector3.Zero());
+	//camera.setTarget(Vector3.Zero());
 	// Attach the camera to the canvas
-	// TODO: camera.attachControl(canvas, false);
-	// Create a basic light, aiming 0, 1, 0 - meaning, to the sky
-	//const light = new BABYLON.HemisphericLight('light1', new BABYLON.Vector3(0, 1, 0), scene);
+	//camera.attachControl(canvas, false);
+	// enable WASD controls
+	/*
+	camera.keysUp = [87];
+	camera.keysDown = [83];
+	camera.keysLeft = [65];
+	camera.keysRight = [68];
+	*/
+	// movement speed
+	camera.speed = 0.1;
+	camera.wheelDeltaPercentage = 0.05;
+	camera.minZ = 0.1;
+	const light = new HemisphericLight('light', new Vector3(0, 1, 0), scene);
 	// Create a built-in "sphere" shape; its constructor takes 6 params: name, segment, diameter, scene, updatable, sideOrientation
-	//const sphere = BABYLON.Mesh.CreateSphere('sphere1', 16, 2, scene, false, BABYLON.Mesh.FRONTSIDE);
+	//const sphere = MeshBuilder.CreateSphere('sphere1', { segments: 16, diameter: 2, updatable: false, sideOrientation: Mesh.FRONTSIDE }, scene);
 	// Move the sphere upward 1/2 of its height
 	//sphere.position.y = 1;
-	// Create a built-in "ground" shape; its constructor takes 6 params : name, width, height, subdivision, scene, updatable
-	//const ground = BABYLON.Mesh.CreateGround('ground1', 6, 6, 2, scene, false);
-	// Return the created scene
+	// show world axes
+	//new AxesViewer(scene, 0.1, undefined, undefined, undefined, undefined, 0.1);
+	Inspector.Show(scene, {embedMode: false});
 	return scene;
 }
-// call the createScene function
 const scene = createScene();
 
 const inputFileBaseName = inputFileName.slice(inputFileName.lastIndexOf('/') + 1, -4);
 
 const kmf = new Kmf(new KaitaiStream(fileContent));
+
+// normalize asset keys for case-insensitive lookup (filename -> url/blob)
+const assetsNormalized = {};
+for (const k of Object.keys(assets || {})) {
+	assetsNormalized[k.toLowerCase()] = assets[k];
+}
 
 // convert KMF to OBJ
 if (kmf.header.format > 2) {
@@ -53,8 +131,6 @@ function computeAnimVertex(frameIdx, itabIdx) {
 	const curVertex = kmf.mesh.geom.verticesAnim[geomIndex];
 	const frameBase = curVertex.frameBase;
 
-	output.write(`# geomIndex ${geomIndex} base ${curVertex.frameBase} frame ${frameIdx}\n`);
-
 	let x = (curVertex.coords.x - 512) / 511.0 * kmf.mesh.header.scale - kmf.mesh.header.translation.x;
 	let y = (curVertex.coords.y - 512) / 511.0 * kmf.mesh.header.scale - kmf.mesh.header.translation.y;
 	let z = (curVertex.coords.z - 512) / 511.0 * kmf.mesh.header.scale - kmf.mesh.header.translation.z;
@@ -63,9 +139,11 @@ function computeAnimVertex(frameIdx, itabIdx) {
 		// interpolate between the current and next "keyframe" vertex
 		const nextVertex = kmf.mesh.geom.verticesAnim[geomIndex + 1];
 		const nextFrameBase = nextVertex.frameBase;
-		const geomFactor = (frameIdx & 0x7F - frameBase) / (nextFrameBase - frameBase);
 
-		output.write(`# nextBase ${nextFrameBase} geomFactor ${geomFactor}\n`);
+		// the last frame will have an extra duplicate entry
+		// so prevent division by zero
+		const geomFactor = nextFrameBase <= frameBase ? 0 :
+			((frameIdx & 0x7F) - frameBase) / (nextFrameBase - frameBase);
 
 		x = x * (1 - geomFactor) + geomFactor * ((nextVertex.coords.x - 512) / 511.0 * kmf.mesh.header.scale - kmf.mesh.header.translation.x);
 		y = y * (1 - geomFactor) + geomFactor * ((nextVertex.coords.y - 512) / 511.0 * kmf.mesh.header.scale - kmf.mesh.header.translation.y);
@@ -79,36 +157,40 @@ const isAnim = kmf.header.format === 2;
 
 const materials = [];
 const textures = {};
-const multimat = new BABYLON.MultiMaterial("multi", scene);
+const multimat = new MultiMaterial("multi", scene);
 for (let i = 0; i < kmf.materials.numMaterials; ++i) {
 	const kmfmat = kmf.materials.materials[i];
 	const textureName = `${kmfmat.textures[0]}.png`; // TODO: alternative textures
-	const mat = new BABYLON.StandardMaterial(kmfmat.name, scene);
-	if (!(textureName in textures))
-		textures[textureName] = new BABYLON.Texture(/*"file://../assets/Converted/Textures/" + */ textureName, scene, { onLoad: () => console.log('loaded'), onError: (message, exception) => console.error(message, exception), creationFlags: BABYLON.Constants.TEXTURE_CREATIONFLAG_STORAGE });
-	mat.diffuseTexture = textures[textureName];
-	//mat.bumpTexture = new BABYLON.Texture(`${mat.textures[0]}_n.png`, scene);
+	const mat = new StandardMaterial(kmfmat.name, scene);
+	// prefer uploaded asset URL (case-insensitive), fallback to the filename
+	const textureUrl = assetsNormalized[textureName.toLowerCase()] || textureName;
+	let tex = textures[textureName];
+	if (!tex) {
+		tex = new Texture(textureUrl, scene, {
+			onLoad: () => console.log('loaded', textureUrl),
+			onError: (message, exception) => {
+				mat.diffuseColor = new Color3(...hueToRgb((i * 137.5) % 360));
+				mat.diffuseTexture = null;
+				console.error(message, exception);
+			}, creationFlags: Constants.TEXTURE_CREATIONFLAG_STORAGE
+		});
+		tex.name = textureName;
+		textures[textureName] = tex;
+	}
+		mat.diffuseTexture = tex;
+
 	if (kmfmat.flags & Kmf.Matl.Mat2.MaterialFlags.DOUBLE_SIDED) {
 		//mat.backFaceCulling = false;
+		//mat.twoSidedLighting = true;
 	}
 	materials.push(mat);
 	multimat.subMaterials.push(mat);
 }
 
-const mesh = new BABYLON.Mesh(kmf.mesh.header.meshname, scene);
+const mesh = new Mesh(kmf.mesh.header.meshname, scene);
 mesh.material = multimat;
-const morphManager = new BABYLON.MorphTargetManager();
+const morphManager = new MorphTargetManager();
 mesh.morphTargetManager = morphManager;
-
-// write the normals and UVs
-for (const meshGroupData of kmf.mesh.model.groupData) {
-	//mesh.material = materials[meshGroupData.materialIdx];
-
-	for (const vertex of meshGroupData.vertices.vertexData) {
-		// uvs.push(vertex.u / 32768.0, 1.0 - vertex.v / 32768.0);
-		// output.write(util.format("vn %d %d %d\n", vertex.nX, -vertex.nZ, vertex.nY));
-	}
-}
 
 const lodLevel = 0;
 
@@ -121,7 +203,7 @@ let numMeshTriangles = 0;
 for (const meshGroup of kmf.mesh.model.groups)
 	numMeshTriangles += meshGroup.numTrisPerLevel[lodLevel];
 
-const animGroup = new BABYLON.AnimationGroup("animGroup");
+const animGroup = new AnimationGroup(kmf.mesh.header.meshname);
 for (let frameIdx = 0; frameIdx < (isAnim ? kmf.mesh.header.numFrames : 1); ++frameIdx) {
 
 	let subMeshBaseVertex = 0;
@@ -135,6 +217,7 @@ for (let frameIdx = 0; frameIdx < (isAnim ? kmf.mesh.header.numFrames : 1); ++fr
 		const meshGroup = kmf.mesh.model.groups[i];
 		const meshGroupData = kmf.mesh.model.groupData[i];
 
+		let numSubmeshTriangles = meshGroup.numTrisPerLevel[lodLevel];
 		// determine max used vertex, the rest up to meshGroup.numVertices is for lower LODs
 		let numSubmeshVertices = 0;
 		for (const triangle of meshGroupData.polygons.lodLevels[lodLevel].triangles)
@@ -163,7 +246,7 @@ for (let frameIdx = 0; frameIdx < (isAnim ? kmf.mesh.header.numFrames : 1); ++fr
 		for (const triangle of meshGroupData.polygons.lodLevels[lodLevel].triangles) {
 
 			if (frameIdx === 0) {
-				indices.push(subMeshBaseVertex + triangle.x, subMeshBaseVertex + triangle.z, subMeshBaseVertex + triangle.y);
+				indices.push(subMeshBaseVertex + triangle.x, subMeshBaseVertex + triangle.y, subMeshBaseVertex + triangle.z);
 			}
 
 			const processVertex = (vertexIdx) => {
@@ -175,36 +258,36 @@ for (let frameIdx = 0; frameIdx < (isAnim ? kmf.mesh.header.numFrames : 1); ++fr
 					} else {
 						pos = kmf.mesh.geom.vertices[v.geomIdx];
 					}
-					positions.splice((subMeshBaseVertex + vertexIdx) * 3, 3, pos.x, pos.z, pos.y);
+					positions.splice((subMeshBaseVertex + vertexIdx) * 3, 3, pos.x, -pos.z, pos.y);
 				}
 			}
 			processVertex(triangle.x);
 			processVertex(triangle.y);
 			processVertex(triangle.z);
 		}
-		subMeshBaseIndex += 3 * meshGroup.numTrisPerLevel[lodLevel];
+		subMeshBaseIndex += 3 * numSubmeshTriangles;
 		subMeshBaseVertex += numSubmeshVertices;
 	}
 
 	if (frameIdx === 0) {
 		//const normals = [];
-		//BABYLON.VertexData.ComputeNormals(positions, indices, normals);
-		//BABYLON.VertexData._ComputeSides(BABYLON.Mesh.FRONTSIDE, positions, indices, normals, uvs);
+		//VertexData.ComputeNormals(positions, indices, normals);
+		//VertexData._ComputeSides(Mesh.FRONTSIDE, positions, indices, normals, uvs);
 
-		const vertexData = new BABYLON.VertexData();
+		const vertexData = new VertexData();
 		vertexData.positions = positions;
 		vertexData.indices = indices;
-		vertexData.normals = normals;
+		//vertexData.normals = normals;
 		vertexData.uvs = uvs;
 		vertexData.applyToMesh(mesh, false);
 	} else {
-		const target = new BABYLON.MorphTarget("frame" + frameIdx, 0);
+		const target = new MorphTarget("morph target " + frameIdx, 0);
 		target.setPositions(positions);
 		//target.setNormals(positions);
 		morphManager.addTarget(target);
 	//}
 	//if (frameIdx === 0 && isAnim) {
-		const morphAnim = new BABYLON.Animation("animation frame " + frameIdx, "influence", 20, BABYLON.Animation.ANIMATIONTYPE_FLOAT, BABYLON.ANIMATIONLOOPMODE_CYCLE);
+		const morphAnim = new Animation("frame " + frameIdx, "influence", 20, Animation.ANIMATIONTYPE_FLOAT, Animation.ANIMATIONLOOPMODE_CYCLE);
 		const keys = [];
 		// loop over num frames
 		for (let f = 0; f < kmf.mesh.header.numFrames; ++f) {
@@ -226,11 +309,12 @@ for (let frameIdx = 0; frameIdx < (isAnim ? kmf.mesh.header.numFrames : 1); ++fr
 		// add animation to the cube mesh
 		//mesh.animations.push(morphAnim);
 	}
-	
-	// start animation by calling beginAnimation on the cube's influence
-	//scene.beginAnimation(cubeMorph, 0, keys[keys.length - 1].frame, true);
 }
-if (0) {
+// start animation by calling beginAnimation on the cube's influence
+//scene.beginAnimation(animationGroup, 0, kmf.mesh.header.numFrames-1, true);
+animGroup.play(true);
+
+// TODO: create per-group SubMesh entries so materials/exporters can see them
 mesh.subMeshes = [];
 let subMeshBaseVertex = 0;
 let subMeshBaseIndex = 0;
@@ -238,49 +322,56 @@ for (let i = 0; i < kmf.mesh.header.numGroups; ++i) {
 	const meshGroup = kmf.mesh.model.groups[i];
 	const meshGroupData = kmf.mesh.model.groupData[i];
 
-	// TODO: maybe somehow get this from mesh
+	let numSubmeshTriangles = meshGroup.numTrisPerLevel[lodLevel];
 	// determine max used vertex, the rest up to meshGroup.numVertices is for lower LODs
 	let numSubmeshVertices = 0;
 	for (const triangle of meshGroupData.polygons.lodLevels[lodLevel].triangles)
 		numSubmeshVertices = Math.max(numSubmeshVertices, triangle.x, triangle.y, triangle.z);
 	++numSubmeshVertices;
-	// TODO: can set a name somehow?
-	// TODO: bounding box is still the full mesh
-	new BABYLON.SubMesh(meshGroupData.materialIdx, subMeshBaseVertex, numSubmeshVertices, subMeshBaseIndex, 3 * meshGroup.numTrisPerLevel[lodLevel], mesh, undefined, true);
-	subMeshBaseIndex += 3 * meshGroup.numTrisPerLevel[lodLevel];
+
+	// create SubMesh: (materialIndex, verticesStart, verticesCount, indexStart, indexCount, mesh)
+	new SubMesh(meshGroupData.materialIdx, subMeshBaseVertex, numSubmeshVertices, subMeshBaseIndex, 3 * numSubmeshTriangles, mesh, undefined, true);
+	subMeshBaseIndex += 3 * numSubmeshTriangles;
 	subMeshBaseVertex += numSubmeshVertices;
 }
-//mesh.material = materials[meshGroupData.materialIdx];
-}
 
+// Export options (no skybox in this context)
 const options = {
 	shouldExportNode: function (node) {
 		return node !== skybox;
 	},
 };
-	scene.executeWhenReady(() => {
-		GLTF2Export.GLTFAsync(scene, inputFileBaseName + ".gltf", { animationSampleRate: 20 }).then((gltf) => {
-		//gltf.downloadFiles();
-		//output.write(gltf.glTFFiles["Piranha_Swim.gltf"]);
-		fs.writeFileSync(inputFileBaseName + ".gltf", gltf.glTFFiles[inputFileBaseName + ".gltf"]);
-		gltf.glTFFiles[inputFileBaseName + ".bin"].arrayBuffer().then((buffer) => {
-			//output.write(new Uint8Array(buffer));
-			fs.writeFileSync(inputFileBaseName + ".bin", Buffer.from(buffer));
-		});
+if (0)
+scene.executeWhenReady(() => {
+	GLTF2Export.GLBAsync(scene, inputFileBaseName, { animationSampleRate: 20 }).then((gltf) => {
+	gltf.downloadFiles(); // for the browser
+	// those are just for nodejs
+	/*
+	//output.write(gltf.files["Piranha_Swim.gltf"]);
+	fs.writeFileSync(inputFileBaseName + ".gltf", gltf.files[inputFileBaseName + ".gltf"]);
+	gltf.files[inputFileBaseName + ".bin"].arrayBuffer().then((buffer) => {
+		//output.write(new Uint8Array(buffer));
+		fs.writeFileSync(inputFileBaseName + ".bin", Buffer.from(buffer));
 	});
+	*/
 });
-/*
+});
+
 // run the render loop
-engine.runRenderLoop(function () {
-	scene.render();
-});
-// the canvas/window resize event handler
-window.addEventListener('resize', function () {
-	engine.resize();
-});
-*/
+if (isBrowser) {
+	engine.runRenderLoop(function () {
+		scene.render();
+	});
+	// the canvas/window resize event handler
+	window.addEventListener('resize', function () {
+		engine.resize();
+	});
 }
 
+}
+
+/*
+// CLI
 if (typeof module !== 'undefined' && module.exports) {
 	console.log('module.exports');
 	module.exports = kmf2gltf;
@@ -297,3 +388,4 @@ if (typeof require !== 'undefined' && require.main === module || import.meta.url
 	kmf2gltf(inputFileName, fileContent, process.stdout);
 	// let outputFileStream = fs.createWriteStream('log.txt', {'flags': 'a'});
 }
+*/

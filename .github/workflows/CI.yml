@@ -30,8 +30,8 @@ jobs:
       run: |
         set -eux
         npm install
-        curl -LO https://github.com/kaitai-io/kaitai_struct_compiler/releases/download/0.10/kaitai-struct-compiler_0.10_all.deb
-        sudo apt-get install ./kaitai-struct-compiler_0.10_all.deb
+        curl -LO https://github.com/kaitai-io/kaitai_struct_compiler/releases/download/0.11/kaitai-struct-compiler_0.11_all.deb
+        sudo apt-get install ./kaitai-struct-compiler*.deb
 
     - name: build
       run: |
@@ -39,7 +39,6 @@ jobs:
         kaitai-struct-compiler --verbose file -t javascript kmf.ksy
         ls -la
         npm run build
-        cp kmf2obj.html StringStreamWriter.mjs dist/
 
     - uses: actions/upload-artifact@v4
       with:

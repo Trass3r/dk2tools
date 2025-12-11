@@ -1,3 +1,11 @@
 package-lock.json
 node_modules
 dist/
+
+*.gltf
+*.kmf
+*.obj
+*.mtl
+*.png
+*.jpg
+*.bin

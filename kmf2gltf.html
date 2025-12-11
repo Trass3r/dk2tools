@@ -3,29 +3,73 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>KMF 2 OBJ</title>
+  <title>KMF 2 GLTF</title>
   <style>
-    #output {
-      white-space: pre-wrap;
+    /* dark theme, full-viewport canvas */
+    :root{
+      --bg:#0b0d10;
+      --panel:#101217;
+      --muted:#9aa1a8;
+      --accent:#1f8bd3;
+      --glass: rgba(255,255,255,0.03);
     }
+    html, body {
+      height: 100%;
+      margin: 0;
+      background: var(--bg);
+      color: #e6edf3;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial;
+      -webkit-font-smoothing: antialiased;
+      -moz-osx-font-smoothing: grayscale;
+    }
+    #outputDiv, #renderCanvas {
+      width: 67vw;
+      height: 100vh;
+      display: block;
+      box-sizing: border-box;
+      background: var(--bg);
+    }
+    #renderCanvas {
+      background: var(--bg);
+      display: block;
+    }
+
+    /* centered drop hint panel */
+    #dropZone{
+      position: fixed;
+      left: 50%;
+      top: 50%;
+      transform: translate(-50%, -50%);
+      background: linear-gradient(180deg, rgba(255,255,255,0.02), rgba(255,255,255,0.01));
+      border: 1px solid rgba(255,255,255,0.06);
+      padding: 28px 36px;
+      border-radius: 12px;
+      max-width: 680px;
+      width: calc(100% - 48px);
+      text-align: center;
+      box-shadow: 0 6px 22px rgba(0,0,0,0.6), inset 0 1px 0 rgba(255,255,255,0.02);
+      color: var(--muted);
+      z-index: 50;
+      backdrop-filter: blur(6px);
+    }
+    #dropZone p{ margin:0; font-size:16px; color:var(--muted); }
+    #dropZone small{ display:block; margin-top:8px; color:#8b949b }
+
+    /* subtle fade when hiding */
+    #dropZone.hidden{ opacity:0; transform: translate(-50%, -46%); pointer-events:none; transition: opacity 240ms ease, transform 240ms ease; }
   </style>
 </head>
 <body>
   <div id="dropZone">
-    <p>Drag and drop a file here, or</p>
-    <input type="file" id="fileInput" accept=".kmf">
-    <button id="uploadButton">Convert</button>
+    <p>Drag and drop a .kmf file (and any textures) anywhere on the window.</p>
   </div>
   <div id="outputDiv">
-    <canvas id="renderCanvas" width="800" height="600">
+    <canvas id="renderCanvas">
 	</canvas>
   </div>
 
   <script type="module">
-    import { StringStreamWriter } from './StringStreamWriter.mjs';
-    import { kmf2gltf } from './dist/kmf2gltf.js';
-
-	kmf2gltf(null, null, null);
+    import { kmf2gltf } from './kmf2gltf.js';
 
     function handleDragOver(event) {
       event.preventDefault();
@@ -34,41 +78,54 @@
 
     function handleDrop(event) {
       event.preventDefault();
-      const file = event.dataTransfer.files[0];
-      handleFile(file);
+      handleFiles(event.dataTransfer.files);
+      const dz = document.getElementById('dropZone');
+      if (dz) dz.classList.add('hidden');
     }
 
     function uploadFile() {
       const fileInput = document.getElementById('fileInput');
-      const file = fileInput.files[0];
-
-      if (file) {
-        handleFile(file);
-      }
+      handleFiles(fileInput.files);
     }
 
-    // Using addEventListener for the upload button
-    document.getElementById('uploadButton').addEventListener('click', uploadFile);
-    // Using addEventListener for the drop zone
-    document.getElementById('dropZone').addEventListener('drop', handleDrop);
-    document.getElementById('dropZone').addEventListener('dragover', handleDragOver);
+    // Global drag/drop handlers so the entire window (canvas) is a drop target
+    window.addEventListener('drop', handleDrop);
+    window.addEventListener('dragover', handleDragOver);
 
-    function handleFile(file) {
-      if (!file.name.endsWith(".kmf")) {
-        alert("I need a kmf file");
+    // handle multiple files (one .kmf, and optional textures/assets)
+    async function handleFiles(fileList) {
+      // hide the drop hint once processing starts (fade)
+      const dz = document.getElementById('dropZone');
+      if (dz) dz.classList.add('hidden');
+      const files = Array.from(fileList || []);
+      const kmfFile = files.find(f => f.name.toLowerCase().endsWith('.kmf'));
+      if (!kmfFile) {
+        alert('Please include a .kmf file');
         return;
       }
-      const reader = new FileReader();
 
-      reader.onload = function (e) {
-        console.log(file.name);
-        const fileContent = e.target.result;
-        const outputWriter = new StringStreamWriter();
-        kmf2gltf(file.name, fileContent, outputWriter);
-        document.getElementById('output').textContent = outputWriter.buffer;
-      };
+      // build assets map: filename -> object URL (for textures/images)
+      const assets = {};
+      for (const f of files) {
+        if (f === kmfFile) continue;
+        // create object URL so Babylon can load the image
+        try {
+          assets[f.name] = URL.createObjectURL(f);
+        } catch (e) {
+          // fallback: skip if cannot create URL
+          console.warn('Could not create object URL for', f.name, e);
+        }
+      }
 
-      reader.readAsArrayBuffer(file);
+      const arrayBuffer = await kmfFile.arrayBuffer();
+      kmf2gltf(kmfFile.name, arrayBuffer, assets);
+
+      // optional: revoke created object URLs after a short delay to allow loading
+      setTimeout(() => {
+        for (const url of Object.values(assets)) {
+          try { URL.revokeObjectURL(url); } catch (e) { }
+        }
+      }, 60 * 1000);
     }
   </script>
 </body>

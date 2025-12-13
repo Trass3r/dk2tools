@@ -8,6 +8,7 @@ import { ArcRotateCamera } from '@babylonjs/core/Cameras/arcRotateCamera.js';
 //import { FreeCamera } from '@babylonjs/core/Cameras/freeCamera.js';
 import { AxesViewer } from '@babylonjs/core/Debug/axesViewer.js';
 import { HemisphericLight } from '@babylonjs/core/Lights/hemisphericLight.js';
+import { PointLight } from '@babylonjs/core/Lights/pointLight.js';
 import { MultiMaterial } from '@babylonjs/core/Materials/multiMaterial.js';
 import { StandardMaterial } from '@babylonjs/core/Materials/standardMaterial.js';
 import { Texture } from '@babylonjs/core/Materials/Textures/texture.js';
@@ -96,6 +97,7 @@ const createScene = function () {
 	camera.wheelDeltaPercentage = 0.05;
 	camera.minZ = 0.1;
 	const light = new HemisphericLight('light', new Vector3(0, 1, 0), scene);
+	const light2 = new PointLight('pointLight', new Vector3(0.1, -0.2, 0.3), scene);
 	// Create a built-in "sphere" shape; its constructor takes 6 params: name, segment, diameter, scene, updatable, sideOrientation
 	//const sphere = MeshBuilder.CreateSphere('sphere1', { segments: 16, diameter: 2, updatable: false, sideOrientation: Mesh.FRONTSIDE }, scene);
 	// Move the sphere upward 1/2 of its height

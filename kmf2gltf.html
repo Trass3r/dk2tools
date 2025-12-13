@@ -139,6 +139,9 @@
       }
     });
 
+    // keep track of the current run so we can clean up WebGL/Babylon state
+    let _currentRun = null;
+
     // handle multiple files (one .kmf, and optional textures/assets)
     async function handleFiles(fileList) {
       // hide the drop hint once processing starts (fade)
@@ -173,7 +176,25 @@
       }
 
       const arrayBuffer = await kmfFile.arrayBuffer();
-      kmf2gltf(kmfFile.name, arrayBuffer, assets);
+      // dispose previous scene/engine to avoid multiple render loops and WebGL program conflicts
+      try {
+        if (_currentRun && _currentRun.scene) {
+          try { _currentRun.scene.dispose(); } catch (e) { console.warn('Error disposing previous scene', e); }
+        }
+        if (_currentRun && _currentRun.engine) {
+          try { _currentRun.engine.stopRenderLoop(); } catch (e) { /* ignore */ }
+          try { _currentRun.engine.dispose(); } catch (e) { console.warn('Error disposing previous engine', e); }
+        }
+      } catch (e) {
+        console.warn('Error cleaning previous run', e);
+      }
+
+      // create new scene/engine and keep reference for future cleanup
+      try {
+        _currentRun = await kmf2gltf(kmfFile.name, arrayBuffer, assets) || null;
+      } catch (e) {
+        console.error('Error while loading KMF', e);
+      }
 
       // optional: revoke created object URLs after a short delay to allow loading
       setTimeout(() => {

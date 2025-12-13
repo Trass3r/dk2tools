@@ -376,6 +376,9 @@ if (isBrowser) {
 	});
 }
 
+// return engine/scene so callers can dispose them when loading a new file
+return { engine, scene };
+
 }
 
 /*

@@ -207,6 +207,45 @@ const uvs = [];
 const normals = [];
 let positions = [];
 
+// esp. at the seams between different textures there will be multiple vertices cause of different UVs
+// so smooth the normals
+function postProcessNormals(positions, normals) {
+	const vertCount = positions.length / 3;
+	const map = new Map();
+	const quantization = 1e3;
+	for (let i = 0; i < vertCount; ++i) {
+		const x = positions[3 * i];
+		const y = positions[3 * i + 1];
+		const z = positions[3 * i + 2];
+		const key = `${Math.round(x * quantization)}_${Math.round(y * quantization)}_${Math.round(z * quantization)}`;
+		let arr = map.get(key);
+		if (!arr) { arr = []; map.set(key, arr); }
+		arr.push(i);
+	}
+
+	for (const indices of map.values()) {
+		if (indices.length <= 1) continue;
+		let sx = 0, sy = 0, sz = 0;
+		for (const vi of indices) {
+			sx += normals[3 * vi];
+			sy += normals[3 * vi + 1];
+			sz += normals[3 * vi + 2];
+		}
+		const avg = [sx/indices.length, sy/indices.length, sz/indices.length];
+		const len = Math.hypot(avg[0], avg[1], avg[2]);
+		if (len < 1e-3) {
+			// e.g. opposite normals on a flat surface
+			continue;
+		}
+		avg[0] /= len; avg[1] /= len; avg[2] /= len;
+		for (const vi of indices) {
+			normals[3 * vi] = avg[0];
+			normals[3 * vi + 1] = avg[1];
+			normals[3 * vi + 2] = avg[2];
+		}
+	}
+}
+
 let numMeshTriangles = 0;
 for (const meshGroup of kmf.mesh.model.groups)
 	numMeshTriangles += meshGroup.numTrisPerLevel[lodLevel];
@@ -279,20 +318,24 @@ for (let frameIdx = 0; frameIdx < (isAnim ? kmf.mesh.header.numFrames : 1); ++fr
 	}
 
 	if (frameIdx === 0) {
-		//const normals = [];
-		//VertexData.ComputeNormals(positions, indices, normals);
-		//VertexData._ComputeSides(Mesh.FRONTSIDE, positions, indices, normals, uvs);
+		if (0) { // original normals are already smooth
+			VertexData.ComputeNormals(positions, indices, normals);
+			postProcessNormals(positions, normals);
+		}
 
 		const vertexData = new VertexData();
 		vertexData.positions = positions;
 		vertexData.indices = indices;
-		//vertexData.normals = normals;
+		vertexData.normals = normals;
 		vertexData.uvs = uvs;
 		vertexData.applyToMesh(mesh, false);
 	} else {
+		const normals = [];
+		VertexData.ComputeNormals(positions, indices, normals);
+		postProcessNormals(positions, normals);
 		const target = new MorphTarget("morph target " + frameIdx, 0);
 		target.setPositions(positions);
-		//target.setNormals(positions);
+		target.setNormals(normals);
 		morphManager.addTarget(target);
 	//}
 	//if (frameIdx === 0 && isAnim) {

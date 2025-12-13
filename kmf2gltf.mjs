@@ -157,6 +157,10 @@ function computeAnimVertex(frameIdx, itabIdx) {
 
 const isAnim = kmf.header.format === 2;
 
+	const showUserMsg = (isBrowser && typeof globalThis.showUserMsg === 'function')
+	? globalThis.showUserMsg
+	: (() => {});
+
 const materials = [];
 const textures = {};
 const multimat = new MultiMaterial("multi", scene);
@@ -173,13 +177,14 @@ for (let i = 0; i < kmf.materials.numMaterials; ++i) {
 			onError: (message, exception) => {
 				mat.diffuseColor = new Color3(...hueToRgb((i * 137.5) % 360));
 				mat.diffuseTexture = null;
+				showUserMsg(`Texture ${textureName} is missing`, 3000);
 				console.error(message, exception);
 			}, creationFlags: Constants.TEXTURE_CREATIONFLAG_STORAGE
 		});
 		tex.name = textureName;
 		textures[textureName] = tex;
 	}
-		mat.diffuseTexture = tex;
+	mat.diffuseTexture = tex;
 
 	if (kmfmat.flags & Kmf.Matl.Mat2.MaterialFlags.DOUBLE_SIDED) {
 		//mat.backFaceCulling = false;

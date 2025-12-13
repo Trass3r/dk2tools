@@ -183,6 +183,14 @@ for (let i = 0; i < kmf.materials.numMaterials; ++i) {
 		//mat.backFaceCulling = false;
 		//mat.twoSidedLighting = true;
 	}
+	if (kmfmat.flags & Kmf.Matl.Mat2.MaterialFlags.IS_SHININESS_SET) {
+		//mat.specularColor = new Color3(1, 1, 1);
+		//mat.specularPower = 64; // default
+	} else {
+		// less shiny default for other materials
+		mat.specularColor = new Color3(0.3, 0.3, 0.3);
+		mat.specularPower = 16;
+	}
 	materials.push(mat);
 	multimat.subMaterials.push(mat);
 }

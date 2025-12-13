@@ -86,13 +86,14 @@ types:
         enums:
           material_flags:
             1: has_alpha
-            2: double_sided
-            4: alpha_additive
+            # closely related to 0x1 but both exist in isolation too
+            2: double_sided # Some sort of shininess, used e.g. in axe blade, piranha tail
+            4: alpha_additive # Also emits "light" / glows..?
             8: unknown8 # ice? only set on #TRANS25#icey
             16: unknown10 # only used for 'Angel Bed RibsCreature Bed_Dark Angel2'
             32: unknown20 # never used?
-            64: is_shininess_set
-            128: is_brightness_set
+            64: is_shininess_set # metal? sword, pickimpback etc.
+            128: is_brightness_set # Some sort of glow? e.g. Lava
             256: invisible # Environment mapped, invisible guys have this???
 
   mesh:

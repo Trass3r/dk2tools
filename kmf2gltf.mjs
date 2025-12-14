@@ -166,6 +166,11 @@ const textures = {};
 const multimat = new MultiMaterial("multi", scene);
 for (let i = 0; i < kmf.materials.numMaterials; ++i) {
 	const kmfmat = kmf.materials.materials[i];
+
+	const flags = kmfmat.flags | 0;
+	if (flags & Kmf.Matl.Mat2.MaterialFlags.INVISIBLE)
+		continue;
+
 	const textureName = `${kmfmat.textures[0]}.png`; // TODO: alternative textures
 	const mat = new StandardMaterial(kmfmat.name, scene);
 	// prefer uploaded asset URL (case-insensitive), fallback to the filename
@@ -186,18 +191,60 @@ for (let i = 0; i < kmf.materials.numMaterials; ++i) {
 	}
 	mat.diffuseTexture = tex;
 
-	if (kmfmat.flags & Kmf.Matl.Mat2.MaterialFlags.DOUBLE_SIDED) {
+	// alpha / blending modes
+	if (flags & Kmf.Matl.Mat2.MaterialFlags.HAS_ALPHA) {
+		mat.useAlphaFromDiffuseTexture = true;
+		mat.transparencyMode = StandardMaterial.MATERIAL_ALPHATEST; // masked / cutout
+		// additive or blended cases
+		if (flags & Kmf.Matl.Mat2.MaterialFlags.ALPHA_ADDITIVE) {
+			mat.transparencyMode = StandardMaterial.MATERIAL_ALPHABLEND;
+			mat.alpha = 1.0;
+		}
+		if (flags & Kmf.Matl.Mat2.MaterialFlags.TRANSLUCENT) {
+			mat.transparencyMode = StandardMaterial.MATERIAL_ALPHABLEND;
+		}
+	} else {
+		mat.useAlphaFromDiffuseTexture = false;
+		mat.transparencyMode = StandardMaterial.MATERIAL_OPAQUE;
+	}
+
+	// double-sided / back-face culling
+	if (flags & Kmf.Matl.Mat2.MaterialFlags.DOUBLE_SIDED) {
 		//mat.backFaceCulling = false;
 		//mat.twoSidedLighting = true;
 	}
-	if (kmfmat.flags & Kmf.Matl.Mat2.MaterialFlags.IS_SHININESS_SET) {
-		//mat.specularColor = new Color3(1, 1, 1);
-		//mat.specularPower = 64; // default
+
+	// specular / shininess mapping
+	if (flags & Kmf.Matl.Mat2.MaterialFlags.HAS_SPECULAR) {
+		// 0.2 pickimpback/armor/mistress suit, 0.3 GuardFrnt/DarkAngel sword, 0.4/0.5 swords/blades/scythe, 1 128gem1/#mask#gembit/Brickex1
+		const s = Math.max(0, Math.min(1, kmfmat.shininess + 0.2));
+
+		mat.specularColor = new Color3(s, s, s);
+
+		// use a softer exponent so low s produce visibly stronger highlights than zero
+		const minP = 2;   // very dull
+		const maxP = 128; // very sharp
+		const exponent = 1.5;
+		mat.specularPower = Math.round(minP + (maxP - minP) * Math.pow(s, exponent));
+
+		if (kmfmat.envmap) {
+			try {
+				// mat.reflectionTexture = new EnvCubeTexture(kmfmat.envmap, scene);
+			} catch (e) {
+				console.warn('failed to create env map', kmfmat.envmap, e);
+			}
+		}
 	} else {
-		// less shiny default for other materials
-		mat.specularColor = new Color3(0.3, 0.3, 0.3);
+		// reasonable default for non-specular materials
+		mat.specularColor = new Color3(0.2, 0.2, 0.2);
 		mat.specularPower = 16;
 	}
+
+	if (flags & Kmf.Matl.Mat2.MaterialFlags.HAS_EMISSIVE) {
+		const e = kmfmat.brightness;
+		mat.emissiveColor = new Color3(e, e, e); // 0.2 dungeon heart, 0.4 portal, 0.6 gold, 0.75 torch/lava/fire, 1.0 firefly tail/Torture_Trough/Jack Box
+	}
+
 	materials.push(mat);
 	multimat.subMaterials.push(mat);
 }

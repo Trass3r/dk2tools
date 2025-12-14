@@ -5,68 +5,277 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>KMF 2 GLTF</title>
   <style>
-    #output {
-      white-space: pre-wrap;
+    /* dark theme, full-viewport canvas */
+    :root{
+      --bg:#0b0d10;
+      --panel:#101217;
+      --muted:#9aa1a8;
+      --accent:#1f8bd3;
+      --glass: rgba(255,255,255,0.03);
+    }
+    html, body {
+      height: 100%;
+      margin: 0;
+      background: var(--bg);
+      color: #e6edf3;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial;
+      -webkit-font-smoothing: antialiased;
+      -moz-osx-font-smoothing: grayscale;
+    }
+    #outputDiv, #renderCanvas {
+      width: 67vw;
+      height: 100vh;
+      display: block;
+      box-sizing: border-box;
+      background: var(--bg);
+    }
+    #renderCanvas {
+      background: var(--bg);
+      display: block;
+    }
+
+    /* centered drop hint panel */
+    #dropZone{
+      position: fixed;
+      left: 50%;
+      top: 50%;
+      transform: translate(-50%, -50%);
+      background: linear-gradient(180deg, rgba(255,255,255,0.02), rgba(255,255,255,0.01));
+      border: 1px solid rgba(255,255,255,0.06);
+      padding: 28px 36px;
+      border-radius: 12px;
+      max-width: 680px;
+      width: calc(100% - 48px);
+      text-align: center;
+      box-shadow: 0 6px 22px rgba(0,0,0,0.6), inset 0 1px 0 rgba(255,255,255,0.02);
+      color: var(--muted);
+      z-index: 50;
+      backdrop-filter: blur(6px);
+    }
+    #dropZone p{ margin:0; font-size:16px; color:var(--muted); }
+    #dropZone small{ display:block; margin-top:8px; color:#8b949b }
+
+    /* subtle fade when hiding */
+    #dropZone.hidden{ opacity:0; transform: translate(-50%, -46%); pointer-events:none; transition: opacity 240ms ease, transform 240ms ease; }
+    /* overlay and highlight when dragging files */
+    body.drag-active::before{
+      content: '';
+      position: fixed;
+      left: 0; right: 0; top: 0; bottom: 0;
+      background: rgba(0,0,0,0.45);
+      z-index: 45;
+      pointer-events: none;
+    }
+    body.drag-active #dropZone{
+      box-shadow: 0 0 0 4px rgba(31,139,211,0.85), 0 12px 40px rgba(31,139,211,0.12);
+      transform: translate(-50%, -50%) scale(1.02);
+      border-color: rgba(31,139,211,0.9);
+      transition: box-shadow 160ms ease, transform 160ms ease, border-color 160ms ease;
+    }
+    /* overlay container that holds multiple notifications stacked vertically */
+    .overlay-container {
+      position: fixed;
+      top: 12px;
+      left: 50%;
+      transform: translateX(-50%);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 8px;
+      z-index: 100000;
+      pointer-events: none; /* allow clicks through except the messages themselves */
+      width: auto;
+      max-width: 90%;
+    }
+
+    /* individual message */
+    .temp-overlay {
+      background: rgba(0,0,0,0.85);
+      color: #fff;
+      padding: 8px 12px;
+      border-radius: 6px;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial;
+      box-shadow: 0 2px 10px rgba(0,0,0,0.5);
+      max-width: 100%;
+      text-align: center;
+      pointer-events: auto;
+      opacity: 0;
+      transform: translateY(-6px) scale(0.995);
+    }
+
+    .temp-overlay.overlay-enter {
+      animation: overlay-in 220ms ease forwards;
+    }
+    .temp-overlay.overlay-exit {
+      animation: overlay-out 220ms ease forwards;
+    }
+
+    @keyframes overlay-in {
+      from { opacity: 0; transform: translateY(-6px) scale(0.995); }
+      to   { opacity: 1; transform: translateY(0) scale(1); }
+    }
+    @keyframes overlay-out {
+      from { opacity: 1; transform: translateY(0) scale(1); }
+      to   { opacity: 0; transform: translateY(-6px) scale(0.995); }
     }
   </style>
 </head>
 <body>
   <div id="dropZone">
-    <p>Drag and drop a file here, or</p>
-    <input type="file" id="fileInput" accept=".kmf">
-    <button id="uploadButton">Convert</button>
+    <p>Drag and drop a .kmf file (and any textures) anywhere on the window.</p>
   </div>
   <div id="outputDiv">
-    <canvas id="renderCanvas" width="800" height="600">
+    <canvas id="renderCanvas">
 	</canvas>
   </div>
 
+  <script>
+    window.showUserMsg = function(text, duration = 3000) {
+      try {
+        // ensure container exists
+        let container = document.querySelector('.overlay-container');
+        if (!container) {
+          container = document.createElement('div');
+          container.className = 'overlay-container';
+          document.body.appendChild(container);
+        }
+        const el = document.createElement('div');
+        el.className = 'temp-overlay overlay-enter';
+        el.textContent = text;
+        container.appendChild(el);
+        // schedule exit animation then removal
+        setTimeout(() => {
+          try {
+            el.classList.remove('overlay-enter');
+            el.classList.add('overlay-exit');
+            el.addEventListener('animationend', () => { try { el.remove(); } catch (e) {} }, { once: true });
+          } catch (e) { /* ignore */ }
+        }, duration);
+      } catch (e) {
+        console.warn('showUserMsg failed', e);
+      }
+    };
+  </script>
+
   <script type="module">
-    //import { StringStreamWriter } from './StringStreamWriter.mjs';
     import { kmf2gltf } from './kmf2gltf.js';
+
+    // Use a debounced dragover approach to avoid flicker and ensure stable state
+    let _dragTimeout = null;
+    function setDragActive() {
+      // show overlay and panel
+      document.body.classList.add('drag-active');
+      const dz = document.getElementById('dropZone');
+      if (dz) dz.classList.remove('hidden');
+
+      // reset timer that will clear the active state shortly after drag stops
+      if (_dragTimeout) clearTimeout(_dragTimeout);
+      _dragTimeout = setTimeout(() => {
+        document.body.classList.remove('drag-active');
+        _dragTimeout = null;
+      }, 250);
+    }
 
     function handleDragOver(event) {
       event.preventDefault();
-      event.dataTransfer.dropEffect = 'copy';
+      // keep UI active while dragging
+      setDragActive();
+      try { event.dataTransfer.dropEffect = 'copy'; } catch (e) { }
     }
 
     function handleDrop(event) {
       event.preventDefault();
-      const file = event.dataTransfer.files[0];
-      handleFile(file);
+      // clear drag-over timer and visual state
+      if (_dragTimeout) { clearTimeout(_dragTimeout); _dragTimeout = null; }
+      document.body.classList.remove('drag-active');
+      handleFiles(event.dataTransfer.files);
+      const dz = document.getElementById('dropZone');
+      if (dz) dz.classList.add('hidden');
     }
 
     function uploadFile() {
       const fileInput = document.getElementById('fileInput');
-      const file = fileInput.files[0];
-
-      if (file) {
-        handleFile(file);
-      }
+      handleFiles(fileInput.files);
     }
 
-    // Using addEventListener for the upload button
-    document.getElementById('uploadButton').addEventListener('click', uploadFile);
-    // Using addEventListener for the drop zone
-    document.getElementById('dropZone').addEventListener('drop', handleDrop);
-    document.getElementById('dropZone').addEventListener('dragover', handleDragOver);
+    // Global drag/drop handlers so the entire window (canvas) is a drop target
+    window.addEventListener('drop', handleDrop);
+    window.addEventListener('dragover', handleDragOver);
 
-    function handleFile(file) {
-      if (!file.name.endsWith(".kmf")) {
-        alert("I need a kmf file");
+    // also allow ESC to cancel the drag UI
+    window.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape' || e.key === 'Esc') {
+        if (_dragTimeout) { clearTimeout(_dragTimeout); _dragTimeout = null; }
+        document.body.classList.remove('drag-active');
+        // pressing Escape should cancel the drag UI but keep the drop hint visible
+        const dz = document.getElementById('dropZone');
+        if (dz) dz.classList.remove('hidden');
+      }
+    });
+
+    // keep track of the current run so we can clean up WebGL/Babylon state
+    let _currentRun = null;
+
+    // handle multiple files (one .kmf, and optional textures/assets)
+    async function handleFiles(fileList) {
+      // hide the drop hint once processing starts (fade)
+      const dz = document.getElementById('dropZone');
+      if (dz) dz.classList.add('hidden');
+      const files = Array.from(fileList || []);
+      const kmfFile = files.find(f => f.name.toLowerCase().endsWith('.kmf'));
+      if (!kmfFile) {
+        alert('Please include a .kmf file');
         return;
       }
-      const reader = new FileReader();
 
-      reader.onload = function (e) {
-        console.log(file.name);
-        const fileContent = e.target.result;
-        //const outputWriter = new StringStreamWriter();
-        kmf2gltf(file.name, fileContent);
-        //document.getElementById('output').textContent = outputWriter.buffer;
-      };
+      // build assets map: filename -> object URL (for textures/images)
+      const assets = {};
+      const textureFormats = new Set(['png','jpg','jpeg','ktx','ktx2','dds','bmp','webp']);
+      for (const f of files) {
+        if (f === kmfFile) continue;
+        const name = f.name || '';
+        const dot = name.lastIndexOf('.');
+        const ext = dot >= 0 ? name.slice(dot+1).toLowerCase() : '';
+        if (!textureFormats.has(ext)) {
+          console.warn('Skipping unsupported asset file type:', f.name);
+          continue;
+        }
+        // create object URL so Babylon can load the image
+        try {
+          assets[f.name] = URL.createObjectURL(f);
+        } catch (e) {
+          // fallback: skip if cannot create URL
+          console.warn('Could not create object URL for', f.name, e);
+        }
+      }
 
-      reader.readAsArrayBuffer(file);
+      const arrayBuffer = await kmfFile.arrayBuffer();
+      // dispose previous scene/engine to avoid multiple render loops and WebGL program conflicts
+      try {
+        if (_currentRun && _currentRun.scene) {
+          try { _currentRun.scene.dispose(); } catch (e) { console.warn('Error disposing previous scene', e); }
+        }
+        if (_currentRun && _currentRun.engine) {
+          try { _currentRun.engine.stopRenderLoop(); } catch (e) { /* ignore */ }
+          try { _currentRun.engine.dispose(); } catch (e) { console.warn('Error disposing previous engine', e); }
+        }
+      } catch (e) {
+        console.warn('Error cleaning previous run', e);
+      }
+
+      // create new scene/engine and keep reference for future cleanup
+      try {
+        _currentRun = await kmf2gltf(kmfFile.name, arrayBuffer, assets) || null;
+      } catch (e) {
+        console.error('Error while loading KMF', e);
+      }
+
+      // optional: revoke created object URLs after a short delay to allow loading
+      setTimeout(() => {
+        for (const url of Object.values(assets)) {
+          try { URL.revokeObjectURL(url); } catch (e) { }
+        }
+      }, 60 * 1000);
     }
   </script>
 </body>

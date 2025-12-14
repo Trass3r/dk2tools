@@ -19,6 +19,7 @@ const buildOptions = {
   //minifyIdentifiers: !isWatch,
   //minifySyntax: !isWatch,
   sourcemap: true,
+  metafile: true,
   define: {
     'process.env.NODE_ENV': isWatch ? '"development"' : '"production"',
     'process.env.NODE_DEBUG': 'false',
@@ -159,7 +160,15 @@ if (isWatch && isServe) {
     }
   })();
 } else {
-  esbuild.build(buildOptions).then(() => {
+  esbuild.build(buildOptions).then((result) => {
+    try {
+      if (result && result.metafile) {
+        fs.writeFileSync(path.join(outdir, 'meta.json'), JSON.stringify(result.metafile, null, 2), 'utf8');
+        console.log('Wrote metafile to', path.join(outdir, 'meta.json'));
+      }
+    } catch (e) {
+      console.warn('Writing metafile failed:', e && e.message || e);
+    }
     try {
       copyModifiedFiles();
     } catch (e) {

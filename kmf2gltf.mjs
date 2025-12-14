@@ -265,6 +265,7 @@ for (let frameIdx = 0; frameIdx < (isAnim ? kmf.mesh.header.numFrames : 1); ++fr
 			processVertex(triangle.y);
 			processVertex(triangle.z);
 		}
+		// actual SubMesh objects need to be created after the mesh is finished
 		subMeshBaseIndex += 3 * numSubmeshTriangles;
 		subMeshBaseVertex += numSubmeshVertices;
 	}
@@ -314,7 +315,6 @@ for (let frameIdx = 0; frameIdx < (isAnim ? kmf.mesh.header.numFrames : 1); ++fr
 //scene.beginAnimation(animationGroup, 0, kmf.mesh.header.numFrames-1, true);
 animGroup.play(true);
 
-// TODO: create per-group SubMesh entries so materials/exporters can see them
 mesh.subMeshes = [];
 let subMeshBaseVertex = 0;
 let subMeshBaseIndex = 0;
@@ -329,8 +329,8 @@ for (let i = 0; i < kmf.mesh.header.numGroups; ++i) {
 		numSubmeshVertices = Math.max(numSubmeshVertices, triangle.x, triangle.y, triangle.z);
 	++numSubmeshVertices;
 
-	// create SubMesh: (materialIndex, verticesStart, verticesCount, indexStart, indexCount, mesh)
-	new SubMesh(meshGroupData.materialIdx, subMeshBaseVertex, numSubmeshVertices, subMeshBaseIndex, 3 * numSubmeshTriangles, mesh, undefined, true);
+	// TODO: (subMeshBaseVertex, numSubmeshVertices) as vertices range creates invalid gltf
+	new SubMesh(meshGroupData.materialIdx, 0, mesh.getTotalVertices(), subMeshBaseIndex, 3 * numSubmeshTriangles, mesh, undefined, true);
 	subMeshBaseIndex += 3 * numSubmeshTriangles;
 	subMeshBaseVertex += numSubmeshVertices;
 }
